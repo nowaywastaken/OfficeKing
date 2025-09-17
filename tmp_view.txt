@@ -1,9 +1,0 @@
-pandas
-python-docx
-openpyxl
-xlrd
-PyMuPDF
-Pillow
-numpy
-paddleocr
-paddlepaddle-gpu
