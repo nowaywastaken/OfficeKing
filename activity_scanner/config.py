@@ -11,15 +11,17 @@ STUDENT_ROSTER_PATH = CONFIG_ROOT / "student_roster.json"
 
 
 def _load_text(path: Path) -> str:
-    """Load text using UTF-8 first with graceful fallbacks."""
+    """Load text using common encodings with BOM handling."""
 
-    try:
-        return path.read_text(encoding="utf-8")
-    except UnicodeDecodeError:
+    raw_bytes = path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "gbk"):
         try:
-            return path.read_text(encoding="utf-8-sig")
+            return raw_bytes.decode(encoding)
         except UnicodeDecodeError:
-            return path.read_text(encoding="gbk")
+            continue
+
+    raise UnicodeDecodeError("activity_scanner.config", raw_bytes, 0, len(raw_bytes),
+                              "Unable to decode file using known encodings")
 
 
 def _load_student_roster(path: Path) -> Dict[str, str]:
@@ -43,29 +45,30 @@ def _load_student_roster(path: Path) -> Dict[str, str]:
 
 STUDENT_ID_MAP: Dict[str, str] = _load_student_roster(STUDENT_ROSTER_PATH)
 
-DEFAULT_ACTIVITY_KEYWORDS: Tuple[str, ...] = (
-    "活动",
-    "通知",
-    "志愿",
-    "比赛",
-    "通告",
-    "会议",
-    "证明",
-    "培训",
-    "总结",
-    "名单",
-    "提示",
-)
+DEFAULT_ACTIVITY_KEYWORDS: Tuple[str, ...] = ()
 
-DEFAULT_CLASS_KEYWORDS: List[str] = [
-    "高铁2401",
-    "交通运输学院高铁2401班",
-]
+DEFAULT_CLASS_KEYWORDS: List[str] = []
 
+OCR_SKIP_IF_VECTOR_TEXT: bool = False
+OCR_VECTOR_TEXT_MIN_CHARS: int = 120
+OCR_DPI: int = 150
+OCR_USE_GPU: bool = True
+OCR_LANG: str = "ch"
+OCR_MAX_SIDE: int = 10000
 __all__ = [
     "CONFIG_ROOT",
     "STUDENT_ROSTER_PATH",
     "STUDENT_ID_MAP",
     "DEFAULT_ACTIVITY_KEYWORDS",
     "DEFAULT_CLASS_KEYWORDS",
+    "OCR_SKIP_IF_VECTOR_TEXT",
+    "OCR_VECTOR_TEXT_MIN_CHARS",
+    "OCR_DPI",
+    "OCR_USE_GPU",
+    "OCR_LANG",
+    "OCR_MAX_SIDE",
 ]
+
+
+
+
