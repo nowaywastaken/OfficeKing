@@ -1,8 +1,9 @@
-﻿pandas
+pandas
 python-docx
 openpyxl
-xlrd>=2.0.1
+xlrd
 PyMuPDF
 Pillow
-numpy
-paddleocr
+numpy==1.26.4
+pytesseract
+# 并发模式使用 Python 标准库（concurrent.futures），无需新增依赖

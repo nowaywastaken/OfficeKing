@@ -200,6 +200,6 @@ def scan_document_for_matches(document: ScannableDocument, roster: StudentDirect
                 }
             )
 
-    if not collected_rows:
-        collected_rows.append(create_empty_result_row(document.path, document.activity))
+    # If no hits were found, return an empty list so callers can
+    # treat this file as "unmatched" and exclude it from outputs.
     return collected_rows

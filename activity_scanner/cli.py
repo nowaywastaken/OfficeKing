@@ -17,7 +17,7 @@ from .document_scanner import (
     derive_activity_title,
     scan_document_for_matches,
 )
-from .extractors import FAILED_PDFS, SUPPORTED_EXTENSIONS, open_failed_pdfs, read_text_from_path
+from .extractors import FAILED_PDFS, SUPPORTED_EXTENSIONS, read_text_from_path
 from .report_builder import build_report_tables, write_report_workbook
 from .roster_store import StudentDirectory
 from .schema import (
@@ -148,6 +148,7 @@ def run_cli(argv: List[str] | None = None) -> int:
 
     total = len(resolved_files)
     all_rows: List[dict] = []
+    matched_files: List[Path] = []
 
     for index, path in enumerate(resolved_files, start=1):
         print(f"[{index}/{total}] 正在扫描: {path.name}", flush=True)
@@ -197,15 +198,20 @@ def run_cli(argv: List[str] | None = None) -> int:
             continue
         all_rows.extend(rows)
 
+        # Track files that actually have matches (status == OK rows)
+        if rows and any(r.get(COLUMN_STATUS) == "OK" for r in rows):
+            matched_files.append(path)
+
     output_path = Path(args.out)
     detail, per_activity, per_person, class_hits = build_report_tables(all_rows, roster)
     write_report_workbook(str(output_path), detail, per_activity, per_person, class_hits)
 
-    archive_folder = bundle_run_artifacts(output_path, resolved_files, resolved_targets)
+    # Only copy matched files into the archive bundle
+    archive_folder = bundle_run_artifacts(output_path, matched_files, resolved_targets)
 
     if FAILED_PDFS:
         LOGGER.warning("[PDF] 以下文件文本提取失败，建议手动检查: %s", "、".join(sorted(FAILED_PDFS)))
-        open_failed_pdfs(sorted(FAILED_PDFS))
+        
 
     print(f"扫描完成，共处理 {total} 个文件，结果已集中到 {archive_folder}")
     return 0
