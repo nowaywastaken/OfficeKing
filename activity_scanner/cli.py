@@ -5,7 +5,9 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
+from pathlib import Path
 from typing import List
 
 from .config import DEFAULT_CLASS_KEYWORDS
@@ -34,6 +36,8 @@ LOGGER = logging.getLogger(__name__)
 
 DEFAULT_SCAN_ROOTS = ["input"]
 DEFAULT_OUTPUT_FILE = "activity_hits.xlsx"
+ARCHIVE_ROOT = Path("scan_outputs")
+SOURCE_SUBDIR = "source_files"
 
 
 def parse_cli_arguments(argv: List[str] | None = None) -> argparse.Namespace:
@@ -72,6 +76,55 @@ def resolve_scan_paths(raw_paths: List[str] | None) -> List[str]:
     return raw_paths if raw_paths else list(DEFAULT_SCAN_ROOTS)
 
 
+def _relative_to_targets(path: Path, targets: List[Path]) -> Path:
+    """Build a relative path for archiving based on scan roots."""
+
+    for root in targets:
+        if root.is_file():
+            if path == root:
+                return Path(root.name)
+        else:
+            try:
+                rel = path.relative_to(root)
+                return Path(root.name) / rel
+            except ValueError:
+                continue
+    return Path(path.name)
+
+
+def bundle_run_artifacts(output_path: Path, files: List[Path], targets: List[Path]) -> Path:
+    """Move the Excel output and copy source files into a bundle directory."""
+
+    output_path = output_path.resolve()
+    archive_root = ARCHIVE_ROOT.resolve()
+    archive_root.mkdir(parents=True, exist_ok=True)
+
+    run_folder = archive_root / output_path.stem
+    suffix = 1
+    while run_folder.exists():
+        suffix += 1
+        run_folder = archive_root / f"{output_path.stem}_{suffix}"
+    run_folder.mkdir(parents=True, exist_ok=True)
+
+    destination_output = run_folder / output_path.name
+    if output_path.exists():
+        shutil.move(str(output_path), destination_output)
+    else:
+        LOGGER.warning("预期的输出文件不存在: %s", output_path)
+
+    sources_root = run_folder / SOURCE_SUBDIR
+    for file_path in files:
+        archive_rel = _relative_to_targets(file_path, targets)
+        destination = sources_root / archive_rel
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(file_path, destination)
+        except Exception as exc:
+            LOGGER.warning("复制源文件失败 %s -> %s: %s", file_path, destination, exc)
+
+    return run_folder
+
+
 def run_cli(argv: List[str] | None = None) -> int:
     """Execute the scanner using command-line style arguments."""
 
@@ -85,20 +138,21 @@ def run_cli(argv: List[str] | None = None) -> int:
 
     class_tags = resolve_class_tags(args.class_tags)
     targets = resolve_scan_paths(args.paths)
+    resolved_targets = [Path(target).resolve() for target in targets]
 
     files = collect_supported_paths(targets, SUPPORTED_EXTENSIONS)
-    if not files:
+    resolved_files = [Path(path).resolve() for path in files]
+    if not resolved_files:
         print("未找到可扫描的文件，支持 .docx .pdf .xlsx .xls .csv")
         return 4
 
-    total = len(files)
+    total = len(resolved_files)
     all_rows: List[dict] = []
 
-    for index, path in enumerate(files, start=1):
-        display_name = os.path.basename(path)
-        print(f"[{index}/{total}] 正在扫描: {display_name}", flush=True)
+    for index, path in enumerate(resolved_files, start=1):
+        print(f"[{index}/{total}] 正在扫描: {path.name}", flush=True)
         try:
-            text = read_text_from_path(path)
+            text = read_text_from_path(str(path))
         except ImportError as exc:
             missing = getattr(exc, "name", str(exc))
             print(f"缺少依赖: {missing}")
@@ -106,8 +160,8 @@ def run_cli(argv: List[str] | None = None) -> int:
         except Exception as exc:
             all_rows.append(
                 {
-                    COLUMN_FILE_PATH: path,
-                    COLUMN_ACTIVITY_NAME: os.path.splitext(os.path.basename(path))[0],
+                    COLUMN_FILE_PATH: str(path),
+                    COLUMN_ACTIVITY_NAME: path.stem,
                     COLUMN_STATUS: f"读取失败: {exc}",
                     COLUMN_MATCH_TYPE: "",
                     COLUMN_MATCH_VALUE: "",
@@ -120,16 +174,16 @@ def run_cli(argv: List[str] | None = None) -> int:
             continue
 
         document = ScannableDocument(
-            path=path,
+            path=str(path),
             text=text,
-            activity=derive_activity_title(path, text),
+            activity=derive_activity_title(str(path), text),
         )
         try:
             rows = scan_document_for_matches(document, roster, class_tags)
         except Exception as exc:
             all_rows.append(
                 {
-                    COLUMN_FILE_PATH: path,
+                    COLUMN_FILE_PATH: str(path),
                     COLUMN_ACTIVITY_NAME: document.activity,
                     COLUMN_STATUS: f"扫描异常: {exc}",
                     COLUMN_MATCH_TYPE: "",
@@ -143,14 +197,17 @@ def run_cli(argv: List[str] | None = None) -> int:
             continue
         all_rows.extend(rows)
 
+    output_path = Path(args.out)
     detail, per_activity, per_person, class_hits = build_report_tables(all_rows, roster)
-    write_report_workbook(args.out, detail, per_activity, per_person, class_hits)
+    write_report_workbook(str(output_path), detail, per_activity, per_person, class_hits)
+
+    archive_folder = bundle_run_artifacts(output_path, resolved_files, resolved_targets)
 
     if FAILED_PDFS:
         LOGGER.warning("[PDF] 以下文件文本提取失败，建议手动检查: %s", "、".join(sorted(FAILED_PDFS)))
         open_failed_pdfs(sorted(FAILED_PDFS))
 
-    print(f"扫描完成，共处理 {total} 个文件，结果已写入 {args.out}")
+    print(f"扫描完成，共处理 {total} 个文件，结果已集中到 {archive_folder}")
     return 0
 
 
