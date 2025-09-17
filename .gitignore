@@ -1,2 +1,5 @@
 /.venv
 /activity_hits.xlsx
+/input
+__pycache__
+student_roster.json
