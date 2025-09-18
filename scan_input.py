@@ -125,7 +125,11 @@ def launch_scan() -> int:
         _enable_adaptive_pdf_cache(root)
 
     output = build_output_filename()
-    return run_cli(["--out", output])
+    args = ["--out", output]
+    token = os.environ.get("SCAN_CONTAINS")
+    if token:
+        args += ["--contains", token]
+    return run_cli(args)
 
 
 if __name__ == "__main__":

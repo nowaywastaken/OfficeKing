@@ -59,6 +59,11 @@ def parse_cli_arguments(argv: List[str] | None = None) -> argparse.Namespace:
         default=",".join(DEFAULT_CLASS_KEYWORDS),
         help="班级关键词，逗号分隔。默认使用 config.py 中的配置",
     )
+    parser.add_argument(
+        "--contains",
+        default=None,
+        help="仅筛选正文中包含该文本的文件（大小写敏感）",
+    )
     return parser.parse_args(argv)
 
 
@@ -125,10 +130,63 @@ def bundle_run_artifacts(output_path: Path, files: List[Path], targets: List[Pat
     return run_folder
 
 
+def _run_contains_mode(contains_text: str, files: List[Path], targets: List[Path], output_path: Path) -> int:
+    """Scan files and keep only those whose extracted text contains the token.
+
+    Writes a simple Excel with two columns: 路径, 文件名; bundles the hits and
+    the Excel into a single run folder under ARCHIVE_ROOT.
+    """
+
+    import pandas as pd  # type: ignore[import-not-found]
+
+    matched_files: List[Path] = []
+    total = len(files)
+    for index, path in enumerate(files, start=1):
+        print(f"[{index}/{total}] 检查包含: {path.name}", flush=True)
+        try:
+            text = read_text_from_path(str(path))
+        except ImportError as exc:
+            missing = getattr(exc, "name", str(exc))
+            print(f"跳过 {path.name}（缺少依赖: {missing}）")
+            continue
+        except Exception as exc:
+            print(f"跳过 {path.name}（读取失败: {exc}）")
+            continue
+
+        if contains_text in (text or ""):
+            matched_files.append(path)
+
+    df = pd.DataFrame(
+        [{"路径": str(p), "文件名": p.name} for p in matched_files],
+        columns=["路径", "文件名"],
+    )
+    with pd.ExcelWriter(str(output_path), engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="命中列表")
+
+    archive_folder = bundle_run_artifacts(output_path, matched_files, targets)
+    if FAILED_PDFS:
+        LOGGER.warning("[PDF] 有文件的文本提取失败，可手动检查: %s", "、".join(sorted(FAILED_PDFS)))
+    print(
+        f"完成：总计 {total} 个文件，命中 {len(matched_files)} 个；已打包到 {archive_folder}")
+    return 0
+
+
 def run_cli(argv: List[str] | None = None) -> int:
     """Execute the scanner using command-line style arguments."""
 
     args = parse_cli_arguments(argv)
+
+    # 简单“包含文本”模式优先执行（无需加载名册）
+    contains_text = args.contains or os.environ.get("SCAN_CONTAINS")
+    if contains_text:
+        targets = resolve_scan_paths(args.paths)
+        resolved_targets = [Path(target).resolve() for target in targets]
+        files = collect_supported_paths(targets, SUPPORTED_EXTENSIONS)
+        resolved_files = [Path(path).resolve() for path in files]
+        if not resolved_files:
+            print("未找到可扫描文件；支持 .docx .pdf .xlsx .xls .csv")
+            return 4
+        return _run_contains_mode(str(contains_text), resolved_files, resolved_targets, Path(args.out))
 
     try:
         roster = StudentDirectory.default()
