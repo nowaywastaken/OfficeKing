@@ -1,0 +1,39 @@
+# 示例配置（复制为 config.yml 并按需修改）
+
+# 扫描输入（文件或目录），index.py 仅从这里读取
+input_paths:
+  - input
+
+# 兼容旧入口：并行 PDF 提取的输入（可与 input_paths 相同）
+pdf_paths:
+  - input
+
+# 并发与超时（旧入口使用，可保留）
+workers: 0
+timeout_sec: 300
+
+# 日志等级：DEBUG / INFO / WARNING / ERROR / CRITICAL
+log_level: INFO
+
+# OCR/Tesseract 设置
+ocr_skip_if_vector_text: false
+ocr_vector_text_min_chars: 120
+ocr_dpi: 150
+ocr_use_gpu: true
+ocr_lang: ch
+ocr_max_side: 10000
+
+# 可选关键词（旧模块使用）
+default_activity_keywords: []
+default_class_keywords: []
+
+# 学生名册（JSON），结构：{"students": {"姓名": "学号", ...}}
+student_roster_path: student_roster.json
+
+# Office→Markdown 缓存目录
+markdown_cache_dir: .cache_markdown
+
+# 输出目录与命名（index.py 使用）
+output_root_dir: Output
+output_folder_format: "%Y%m%d%H%M%S这个写得有问题吗"
+report_filename: report.xlsx

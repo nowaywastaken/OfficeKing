@@ -4,3 +4,7 @@
 __pycache__
 student_roster.json
 scan_outputs/
+config.yml
+log.txt
+.cache_markdown/
+Output/

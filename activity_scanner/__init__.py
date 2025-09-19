@@ -1,26 +1,10 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
-"""High-level utilities for scanning student activity documents."""
+"""Activity scanner package (minimal exports for one-click runner).
 
-from .cli import run_cli
-from .report_builder import build_report_tables, write_report_workbook
-from .document_scanner import (
-    ScannableDocument,
-    collect_supported_paths,
-    derive_activity_title,
-    find_occurrences,
-    scan_document_for_matches,
-)
-from .roster_store import StudentDirectory
+The current one-click workflow is implemented in `index.py` and uses the
+`config` and `extractors` submodules directly. This package file intentionally
+does not re-export deprecated interfaces from the old CLI/report pipeline.
+"""
 
-__all__ = [
-    "run_cli",
-    "build_report_tables",
-    "write_report_workbook",
-    "ScannableDocument",
-    "collect_supported_paths",
-    "derive_activity_title",
-    "find_occurrences",
-    "scan_document_for_matches",
-    "StudentDirectory",
-]
+__all__ = []
