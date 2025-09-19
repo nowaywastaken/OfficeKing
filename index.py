@@ -29,32 +29,81 @@ from activity_scanner.config import (
     CONFIG_ROOT,
     LOG_LEVEL,
     STUDENT_ID_MAP,
+    LOG_SUPPRESS_LOGGER_PREFIXES,
+    LOG_SUPPRESS_MESSAGE_CONTAINS,
+    LOG_CLEANUP_REMOVE_WARNING_LINES,
 )
 from activity_scanner.extractors import SUPPORTED_EXTENSIONS, read_text_from_path
 
 
 def setup_logging(log_path: Path, level_name: str) -> None:
-    """Configure logging to console and a single append-only file."""
+    """Configure logging to console and a single append-only file.
+
+    Adds suppression filters for known noisy third-party warnings controlled by
+    config.yml to ensure the log file stays clean without reducing functionality.
+    """
 
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     logger = logging.getLogger()
     logger.setLevel(level)
     logger.handlers.clear()
 
+    # Build a suppression filter based on config values
+    class _SuppressFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:  # type: ignore[override]
+            try:
+                # Drop by logger name prefixes
+                for prefix in LOG_SUPPRESS_LOGGER_PREFIXES:
+                    if prefix and record.name.startswith(prefix):
+                        return False
+                # Drop by substring match in message
+                msg = record.getMessage()
+                for sub in LOG_SUPPRESS_MESSAGE_CONTAINS:
+                    if sub and sub in msg:
+                        return False
+            except Exception:
+                # Never fail logging due to filtering errors
+                pass
+            return True
+
+    suppress_filter = _SuppressFilter()
+
     fmt = logging.Formatter(
         fmt="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    # Optional cleanup: remove historical WARNING lines before opening file handler
+    try:
+        if LOG_CLEANUP_REMOVE_WARNING_LINES and log_path.exists():
+            orig = log_path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            kept = [ln for ln in orig if "[WARNING]" not in ln]
+            if len(kept) != len(orig):
+                tmp = "\n".join(kept) + ("\n" if kept else "")
+                log_path.write_text(tmp, encoding="utf-8")
+    except Exception:
+        # Do not fail if cleanup cannot complete
+        pass
+
     ch = logging.StreamHandler()
     ch.setLevel(level)
     ch.setFormatter(fmt)
+    ch.addFilter(suppress_filter)
     logger.addHandler(ch)
 
     fh = logging.FileHandler(log_path, mode="a", encoding="utf-8")
     fh.setLevel(level)
     fh.setFormatter(fmt)
+    fh.addFilter(suppress_filter)
     logger.addHandler(fh)
+
+    # Additionally, raise levels for specified noisy loggers
+    for prefix in LOG_SUPPRESS_LOGGER_PREFIXES:
+        try:
+            if prefix:
+                logging.getLogger(prefix).setLevel(max(level, logging.ERROR))
+        except Exception:
+            pass
 
 
 def _coerce_paths(values: Iterable[str]) -> List[Path]:

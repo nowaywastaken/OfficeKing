@@ -15,6 +15,15 @@ timeout_sec: 300
 # 日志等级：DEBUG / INFO / WARNING / ERROR / CRITICAL
 log_level: INFO
 
+# 可选：抑制第三方库的噪声 Warning（不影响功能，只清理日志）
+log_suppressed_logger_prefixes:
+  - pdfminer
+log_suppressed_message_contains:
+  - FontBBox
+
+# 可选：启动时清理 log.txt 中历史的 WARNING 行（不影响追加写入）
+log_cleanup_remove_warning_lines: false
+
 # OCR/Tesseract 设置
 ocr_skip_if_vector_text: false
 ocr_vector_text_min_chars: 120
