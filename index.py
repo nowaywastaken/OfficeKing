@@ -384,9 +384,19 @@ def main() -> int:
         df = pd.DataFrame(rows, columns=["命中的内容", "文件名", "保存路径"]) if rows else pd.DataFrame(
             columns=["命中的内容", "文件名", "保存路径"]
         )
-        # Deduplicate rows by (命中的内容, 保存路径) to merge repeated hits
         if not df.empty:
-            df = df.drop_duplicates(subset=["命中的内容", "保存路径"]).reset_index(drop=True)
+            # Build base filename (without suffix) for deduplication
+            df = df.assign(**{"文件名_无后缀": df["文件名"].map(lambda s: Path(str(s)).stem)})
+            before = len(df)
+            # Deduplicate by (姓名, 文件名去后缀). Ignore different paths.
+            df = df.drop_duplicates(subset=["命中的内容", "文件名_无后缀"]).reset_index(drop=True)
+            after = len(df)
+            logging.info("去重完成: %d -> %d (规则: 姓名+文件名(无后缀))", before, after)
+            # Sort by name
+            df = df.sort_values(by=["命中的内容"]).reset_index(drop=True)
+            logging.info("报表排序: 已按姓名升序排序")
+            # Drop helper column before writing
+            df = df.drop(columns=["文件名_无后缀"])  # keep original three columns only
         with pd.ExcelWriter(str(report_path), engine="openpyxl") as writer:
             df.to_excel(writer, index=False, sheet_name="命中明细")
         # Auto-fit columns after writing
