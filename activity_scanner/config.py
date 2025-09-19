@@ -105,6 +105,19 @@ PDF_WORKERS: int = int(_CFG.get("workers"))
 PDF_TIMEOUT_SEC: float = float(_CFG.get("timeout_sec"))
 LOG_LEVEL: str = str(_CFG.get("log_level", "INFO"))
 
+# Logging suppression controls to keep logs clean from third‑party noise
+LOG_SUPPRESS_LOGGER_PREFIXES: List[str] = _coerce_str_list(
+    _CFG.get("log_suppressed_logger_prefixes")
+)
+LOG_SUPPRESS_MESSAGE_CONTAINS: List[str] = _coerce_str_list(
+    _CFG.get("log_suppressed_message_contains")
+)
+
+# Optional: cleanup strategy for existing log file
+LOG_CLEANUP_REMOVE_WARNING_LINES: bool = bool(
+    _CFG.get("log_cleanup_remove_warning_lines", False)
+)
+
 # Paths
 STUDENT_ROSTER_PATH = (CONFIG_ROOT / str(_CFG.get("student_roster_path"))).resolve()
 STUDENT_ID_MAP: Dict[str, str] = _load_student_roster(STUDENT_ROSTER_PATH)
@@ -129,5 +142,8 @@ __all__ = [
     "PDF_WORKERS",
     "PDF_TIMEOUT_SEC",
     "LOG_LEVEL",
+    "LOG_SUPPRESS_LOGGER_PREFIXES",
+    "LOG_SUPPRESS_MESSAGE_CONTAINS",
+    "LOG_CLEANUP_REMOVE_WARNING_LINES",
     "MARKDOWN_CACHE_DIR",
 ]
